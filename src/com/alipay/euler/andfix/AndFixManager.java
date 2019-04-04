@@ -71,14 +71,18 @@ public class AndFixManager {
 
 	public AndFixManager(Context context) {
 		mContext = context;
+		// 判断Android机型是否适支持AndFix
 		mSupport = Compat.isSupport();
 		if (mSupport) {
+			// 初始化签名判断类
 			mSecurityChecker = new SecurityChecker(mContext);
+			// 初始化 存放 odex文件的目录
 			mOptDir = new File(mContext.getFilesDir(), DIR);
 			if (!mOptDir.exists() && !mOptDir.mkdirs()) {// make directory fail
 				mSupport = false;
 				Log.e(TAG, "opt dir create error.");
 			} else if (!mOptDir.isDirectory()) {// not directory
+				//如果不是文件目录就删除
 				mOptDir.delete();
 				mSupport = false;
 			}
@@ -124,6 +128,7 @@ public class AndFixManager {
 			return;
 		}
 
+		// 1、检查 patch的签名
 		if (!mSecurityChecker.verifyApk(file)) {// security check fail
 			return;
 		}
@@ -144,6 +149,7 @@ public class AndFixManager {
 				}
 			}
 
+			// 2、加载patch文件中的dex，并生成 DexFile文件
 			final DexFile dexFile = DexFile.loadDex(file.getAbsolutePath(),
 					optfile.getAbsolutePath(), Context.MODE_PRIVATE);
 
@@ -151,10 +157,13 @@ public class AndFixManager {
 				mSecurityChecker.saveOptSig(optfile);
 			}
 
+			// 新建ClassLoader，并重写findClass方法
 			ClassLoader patchClassLoader = new ClassLoader(classLoader) {
 				@Override
 				protected Class<?> findClass(String className)
 						throws ClassNotFoundException {
+					// 自定义findClass方法，使用DexFile的loadClass进行加载类
+					// 调用 DexFile来加载class
 					Class<?> clazz = dexFile.loadClass(className, this);
 					if (clazz == null
 							&& className.startsWith("com.alipay.euler.andfix")) {
@@ -176,6 +185,7 @@ public class AndFixManager {
 				}
 				clazz = dexFile.loadClass(entry, patchClassLoader);
 				if (clazz != null) {
+					// 进行 fix
 					fixClass(clazz, classLoader);
 				}
 			}
@@ -191,17 +201,23 @@ public class AndFixManager {
 	 *            class
 	 */
 	private void fixClass(Class<?> clazz, ClassLoader classLoader) {
+		// 获取 class类中所有声明的方法
 		Method[] methods = clazz.getDeclaredMethods();
 		MethodReplace methodReplace;
 		String clz;
 		String meth;
+		// 遍历这些方法
 		for (Method method : methods) {
+			// 获取 MethodReplace注解
 			methodReplace = method.getAnnotation(MethodReplace.class);
 			if (methodReplace == null)
 				continue;
+			// 获取MethodReplace注解中类名
 			clz = methodReplace.clazz();
+			// 方法名
 			meth = methodReplace.method();
 			if (!isEmpty(clz) && !isEmpty(meth)) {
+				// 类名和方法名 不为 null，进行实际的方法修复工作
 				replaceMethod(classLoader, clz, meth, method);
 			}
 		}
@@ -227,8 +243,10 @@ public class AndFixManager {
 			}
 			if (clazz != null) {// initialize class OK
 				mFixedClass.put(key, clazz);
+				// 通过方法名以及参数信息 获取到 原有的方法对象
 				Method src = clazz.getDeclaredMethod(meth,
 						method.getParameterTypes());
+				// 将原有方法（有bug）和新加入的方法（解决bug后）传入AndFix，进行方法的替换
 				AndFix.addReplaceMethod(src, method);
 			}
 		} catch (Exception e) {

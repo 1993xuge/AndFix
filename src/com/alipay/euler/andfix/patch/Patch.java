@@ -72,24 +72,34 @@ public class Patch implements Comparable<Patch> {
 		JarFile jarFile = null;
 		InputStream inputStream = null;
 		try {
+			// 使用JarFile读取Patch文件
 			jarFile = new JarFile(mFile);
+			// 获取META-INF/PATCH.MF文件
 			JarEntry entry = jarFile.getJarEntry(ENTRY_NAME);
 			inputStream = jarFile.getInputStream(entry);
 			Manifest manifest = new Manifest(inputStream);
 			Attributes main = manifest.getMainAttributes();
+			// 获取PATCH.MF属性Patch-Name
 			mName = main.getValue(PATCH_NAME);
+			// 获取PATCH.MF属性Created-Time
 			mTime = new Date(main.getValue(CREATED_TIME));
 
 			mClassesMap = new HashMap<String, List<String>>();
 			Attributes.Name attrName;
 			String name;
 			List<String> strings;
+			// 这个是遍历META-INF/PATCH.MF文件中内容
 			for (Iterator<?> it = main.keySet().iterator(); it.hasNext();) {
+				// 属性名
 				attrName = (Attributes.Name) it.next();
 				name = attrName.toString();
+				//判断name的后缀是否是-Classes，
+				// 并把name对应的值加入到集合中，对应的值就是class类名的列表
 				if (name.endsWith(CLASSES)) {
+					// 属性名是以-Classes结尾，那么它的value值是以逗号分隔的热修复类名
 					strings = Arrays.asList(main.getValue(attrName).split(","));
 					if (name.equalsIgnoreCase(PATCH_CLASSES)) {
+						// key：patchName，value：该patch文件中涉及到的类名
 						mClassesMap.put(mName, strings);
 					} else {
 						mClassesMap.put(

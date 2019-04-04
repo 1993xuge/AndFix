@@ -75,9 +75,14 @@ public class PatchManager {
 	 */
 	public PatchManager(Context context) {
 		mContext = context;
+		// 初始化 AndFixManager
 		mAndFixManager = new AndFixManager(mContext);
+		// 初始化存放patch补丁文件的文件夹（/data/data/应用包名/files/apatch目录中）
 		mPatchDir = new File(mContext.getFilesDir(), DIR);
+
+		// 初始化存在Patch类的集合
 		mPatchs = new ConcurrentSkipListSet<Patch>();
+		// 初始化存放类对应的类加载器集合
 		mLoaders = new ConcurrentHashMap<String, ClassLoader>();
 	}
 
@@ -88,6 +93,7 @@ public class PatchManager {
 	 *            App version
 	 */
 	public void init(String appVersion) {
+		// 保护，判断存放Patch文件的目录是否存在，这个目录是在初始化的时候创建的
 		if (!mPatchDir.exists() && !mPatchDir.mkdirs()) {// make directory fail
 			Log.e(TAG, "patch dir create error.");
 			return;
@@ -95,26 +101,37 @@ public class PatchManager {
 			mPatchDir.delete();
 			return;
 		}
+
+		// 存储关于patch文件的信息，在SharedPreferences中存储app版本的信息
 		SharedPreferences sp = mContext.getSharedPreferences(SP_NAME,
 				Context.MODE_PRIVATE);
 		String ver = sp.getString(SP_VERSION, null);
+		// 根据你传入的版本号和之前的对比，做不同的处理
+		// ver == null ： 表明这是第一次初始化
+		// !ver.equalsIgnoreCase(appVersion) : 版本升级
 		if (ver == null || !ver.equalsIgnoreCase(appVersion)) {
+			// 版本升级后，清理之前的Patch文件
 			cleanPatch();
+			// 更新版本号
 			sp.edit().putString(SP_VERSION, appVersion).commit();
 		} else {
+			// 初始化patch列表，把本地的patch文件加载到内存
 			initPatchs();
 		}
 	}
 
+	// 遍历PatchDir目录下的所有patch文件，将patch文件挨个加入到内存中
 	private void initPatchs() {
 		File[] files = mPatchDir.listFiles();
 		for (File file : files) {
+			// 将File文件转换成Patch对象，并存储在内存中
 			addPatch(file);
 		}
 	}
 
 	/**
 	 * add patch file
+	 * 根据 传入的File文件，实例化 Patch对象，并将其加入到mPatchs中
 	 * 
 	 * @param file
 	 * @return patch
@@ -123,7 +140,9 @@ public class PatchManager {
 		Patch patch = null;
 		if (file.getName().endsWith(SUFFIX)) {
 			try {
+				// 实例化Patch对象
 				patch = new Patch(file);
+				// 把patch实例存储到内存的集合中,在PatchManager实例化集合
 				mPatchs.add(patch);
 			} catch (IOException e) {
 				Log.e(TAG, "addPatch", e);
@@ -135,6 +154,7 @@ public class PatchManager {
 	private void cleanPatch() {
 		File[] files = mPatchDir.listFiles();
 		for (File file : files) {
+			// 删除所有的本地缓存patch文件
 			mAndFixManager.removeOptFile(file);
 			if (!FileUtil.deleteFile(file)) {
 				Log.e(TAG, file.getName() + " delete error.");
@@ -150,7 +170,9 @@ public class PatchManager {
 	 * @throws IOException
 	 */
 	public void addPatch(String path) throws IOException {
+		// 根据路径创建文件
 		File src = new File(path);
+		// 在mPatchDir目录下创建相同名称的文件
 		File dest = new File(mPatchDir, src.getName());
 		if(!src.exists()){
 			throw new FileNotFoundException(path);
@@ -159,9 +181,12 @@ public class PatchManager {
 			Log.d(TAG, "patch [" + path + "] has be loaded.");
 			return;
 		}
+		// 将src文件中的内容 拷贝到 dest文件中
 		FileUtil.copyFile(src, dest);// copy to patch's directory
+		// 将File文件转换成Patch对象，并将其加入到内存中
 		Patch patch = addPatch(dest);
 		if (patch != null) {
+			// load Patch对象，进行修复 bug
 			loadPatch(patch);
 		}
 	}
@@ -224,17 +249,22 @@ public class PatchManager {
 	 *            patch
 	 */
 	private void loadPatch(Patch patch) {
+		// 获取所有patch 文件的名字
 		Set<String> patchNames = patch.getPatchNames();
 		ClassLoader cl;
 		List<String> classes;
+		// 遍历 所有的patch名
 		for (String patchName : patchNames) {
+			// 获取 加载该patch文件 class的 ClassLoader
 			if (mLoaders.containsKey("*")) {
 				cl = mContext.getClassLoader();
 			} else {
 				cl = mLoaders.get(patchName);
 			}
 			if (cl != null) {
+				// 获取该patch文件中涉及到的Class的集合
 				classes = patch.getClasses(patchName);
+				// 修复bug方法
 				mAndFixManager.fix(patch.getFile(), cl, classes);
 			}
 		}

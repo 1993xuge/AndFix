@@ -42,10 +42,15 @@ public class Compat {
 
 		isChecked = true;
 		// not support alibaba's YunOs
+		// isYunOS():判断系统是否是YunOs系统，YunOs系统是阿里巴巴的系统
+		// AndFix.setup():在Native层进行热修复设置
+		// isSupportSDKVersion():根据sdk版本判断是否支持
 		if (!isYunOS() && AndFix.setup() && isSupportSDKVersion()) {
+			// 不是YunOs、注册native方法成功、当前SDK版本支持
 			isSupport = true;
 		}
 
+		// 如果在黑名单中，那么就表明不支持
 		if (inBlackList()) {
 			isSupport = false;
 		}

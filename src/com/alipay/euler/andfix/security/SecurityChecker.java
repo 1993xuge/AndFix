@@ -69,6 +69,7 @@ public class SecurityChecker {
 	 */
 	private boolean mDebuggable;
 
+	// 签名机制的初始化过程
 	public SecurityChecker(Context context) {
 		mContext = context;
 		init(mContext);
@@ -98,11 +99,15 @@ public class SecurityChecker {
 	}
 
 	/**
+	 * 对patch文件进行签名校验
+	 * 比对patch文件的签名 与 应用的签名是否一致
+	 *
 	 * @param path
 	 *            Apk file
 	 * @return true if verify apk success
 	 */
 	public boolean verifyApk(File path) {
+		// 当前是debug环境，那么就直接返回true
 		if (mDebuggable) {
 			Log.d(TAG, "mDebuggable = true");
 			return true;
@@ -112,6 +117,7 @@ public class SecurityChecker {
 		try {
 			jarFile = new JarFile(path);
 
+			// 获取 patch文件中的 classes.dex
 			JarEntry jarEntry = jarFile.getJarEntry(CLASSES_DEX);
 			if (null == jarEntry) {// no code
 				return false;
@@ -210,6 +216,7 @@ public class SecurityChecker {
 	}
 
 	// initialize,and check debuggable
+	// 主要是 获取当前应用的签名及其他信息，为了判断与patch文件的签名是否一致。
 	private void init(Context context) {
 		try {
 			PackageManager pm = context.getPackageManager();
